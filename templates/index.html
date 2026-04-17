@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Deepfake Detector</title>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+    <div class="container">
+        <h1>Deepfake Detection System</h1>
+        <p>Upload a photo or video. The system will extract features and run them through MesoNet, Xception, and CapsNet.</p>
+        
+        <form id="uploadForm">
+            <input type="file" id="mediaFile" name="file" accept="image/*,video/*" required>
+            <button type="submit">Analyze Media</button>
+        </form>
+
+        <div id="loader" class="hidden">
+            <div class="spinner"></div>
+            <p>Analyzing... This may take a few moments for videos.</p>
+        </div>
+
+        <div id="results" class="hidden">
+            <h2>Final Verdict: <span id="finalLabel"></span></h2>
+            <div class="metrics">
+                <div class="metric-box">
+                    <h3>Ensemble Score</h3>
+                    <p id="scoreEnsemble">0.00%</p>
+                </div>
+                <div class="metric-box">
+                    <h3>Xception Net (45%)</h3>
+                    <p id="scoreXception">0.00%</p>
+                </div>
+                <div class="metric-box">
+                    <h3>Capsule Net (30%)</h3>
+                    <p id="scoreCapsnet">0.00%</p>
+                </div>
+                <div class="metric-box">
+                    <h3>MesoNet (20%)</h3>
+                    <p id="scoreMesonet">0.00%</p>
+                </div>
+            </div>
+            
+            <p id="framesInfo" class="frames-info"></p>
+
+            <div id="framesGallery" class="frames-gallery">
+                <h3>Faces Extracted & Analyzed</h3>
+                <div id="galleryGrid" class="gallery-grid"></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        document.getElementById('uploadForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const fileInput = document.getElementById('mediaFile');
+            const loader = document.getElementById('loader');
+            const resultsDiv = document.getElementById('results');
+            
+            if (fileInput.files.length === 0) return;
+
+            const formData = new FormData();
+            formData.append('file', fileInput.files[0]);
+
+            loader.classList.remove('hidden');
+            resultsDiv.classList.add('hidden');
+
+            try {
+                const response = await fetch('/predict', {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                const data = await response.json();
+                loader.classList.add('hidden');
+
+                if (data.error) {
+                    alert("Error: " + data.error);
+                    return;
+                }
+
+                const formatPct = (val) => (val * 100).toFixed(2) + '%';
+
+                document.getElementById('finalLabel').innerText = data.label;
+                document.getElementById('finalLabel').style.color = data.label === 'Fake' ? '#e74c3c' : '#2ecc71';
+                
+                document.getElementById('scoreEnsemble').innerText = formatPct(data.ensemble);
+                document.getElementById('scoreXception').innerText = formatPct(data.xception);
+                document.getElementById('scoreCapsnet').innerText = formatPct(data.capsnet);
+                document.getElementById('scoreMesonet').innerText = formatPct(data.mesonet);
+                
+                document.getElementById('framesInfo').innerText = `Based on analysis of ${data.frames_analyzed} valid frame(s).`;
+
+                const galleryGrid = document.getElementById('galleryGrid');
+                galleryGrid.innerHTML = ''; 
+                if (data.frames_base64 && data.frames_base64.length > 0) {
+                    data.frames_base64.forEach(base64Str => {
+                        const img = document.createElement('img');
+                        img.src = "data:image/jpeg;base64," + base64Str;
+                        galleryGrid.appendChild(img);
+                    });
+                }
+
+                resultsDiv.classList.remove('hidden');
+
+            } catch (error) {
+                console.error("Error:", error);
+                alert("An error occurred during processing.");
+                loader.classList.add('hidden');
+            }
+        });
+    </script>
+</body>
+</html>
